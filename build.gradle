@@ -1,10 +1,16 @@
 def targetZip = "dependencies.zip"
 
-
 configurations {
   provided
 }
 
+file "dependencies.properties" withReader {
+    def prop = new Properties()
+    prop.load(it)
+    ext.config = new ConfigSlurper().parse prop
+}
+
+apply from: 'repositories.gradle'
 apply from: 'dependencies.gradle'
 
 @groovy.transform.EqualsAndHashCode

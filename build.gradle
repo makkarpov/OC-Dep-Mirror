@@ -1,0 +1,62 @@
+def targetZip = "dependencies.zip"
+
+
+configurations {
+  provided
+}
+
+apply from: 'dependencies.gradle'
+
+@groovy.transform.EqualsAndHashCode
+class Dependency {
+  String group
+  String id
+  String version
+  String ext
+  
+  def fileName() {
+    def sb = new StringBuilder()
+    
+    if (group != null && !group.empty)
+      sb.append("${group.replace(".", "/")}/")
+    
+    sb.append("${id}/${version}/${id}-${version}")
+    
+    if (ext != null && !ext.empty)
+      sb.append("-${ext}")
+      
+    sb.append(".jar")
+    
+    sb.toString()
+  }
+}
+
+def traverseDependency(dep, ret) {
+  if (dep.moduleArtifacts.size() != 1)
+    throw new IllegalArgumentException("Illegal artifact count ${dep.moduleArtifacts.size()}: ${dep.moduleGroup}:${dep.moduleName}:${dep.moduleVersion}")
+    
+  def artifact = dep.moduleArtifacts.first()
+  def depKey = new Dependency(group: dep.moduleGroup, id: dep.moduleName, version: dep.moduleVersion, ext: artifact.classifier)
+  ret.put(depKey, artifact.file)
+  
+  dep.children.each { traverseDependency(it, ret) }
+}
+
+import java.util.zip.*
+
+task build << {
+  def deps = new HashMap<Dependency, File>()
+  configurations.provided.resolvedConfiguration.firstLevelModuleDependencies.each { traverseDependency(it, deps) }
+ 
+  new File(targetZip).withOutputStream { fos ->
+    def zip = new ZipOutputStream(fos)
+    
+    deps.each { dep, f ->
+      zip.putNextEntry(new ZipEntry(dep.fileName()))
+      f.withInputStream { zip << it }
+      zip.closeEntry()
+    }
+    
+    zip.close()
+  } 
+}
